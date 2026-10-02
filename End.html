@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pharma-Stock | نرم‌افزار جامع مدیریت داروخانه</title>
+    <!-- کتابخانه Supabase -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        * { box-sizing: border-box; font-family: Tahoma, Arial, sans-serif; }
+        body { background-color: #f4f6f9; margin: 0; padding: 20px; direction: rtl; }
+        .container { max-width: 600px; margin: 0 auto; }
+        .card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); margin-bottom: 20px; }
+        h2, h3 { margin-top: 0; color: #2c3e50; text-align: center; }
+        label { display: block; margin-top: 10px; font-weight: bold; font-size: 14px; color: #555; }
+        input, select { width: 100%; padding: 12px; margin-top: 5px; border: 1px solid #ccc; border-radius: 8px; font-size: 14px; }
+        button { width: 100%; padding: 12px; background: #27ae60; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 15px; }
+        button:hover { background: #219150; }
+        .btn-danger { background: #e53e3e; }
+        .btn-danger:hover { background: #c53030; }
+        .tab-btn { background: #edf2f7; color: #4a5568; margin-bottom: 15px; width: 48%; display: inline-block; }
+        .tab-btn.active { background: #3182ce; color: white; }
+        .hidden { display: none; }
+        .status-box { padding: 15px; background: #ebf8ff; border: 1px solid #bee3f8; border-radius: 8px; color: #2b6cb0; text-align: center; font-weight: bold; margin-bottom: 15px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: center; font-size: 13px; }
+        th { background-color: #f8f9fa; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+
+    <!-- بخش اول: ورود / ثبت‌نام -->
+    <div id="auth-section" class="card">
+        <div style="display: flex; justify-content: space-between;">
+            <button class="tab-btn active" id="tab-login-btn" onclick="switchTab('login')">ورود به سیستم</button>
+            <button class="tab-btn" id="tab-reg-btn" onclick="switchTab('register')">ثبت‌نام داروخانه</button>
+        </div>
+
+        <!-- فرم ورود -->
+        <div id="login-form">
+            <h3>ورود به پنل داروخانه</h3>
+            <label>نام کاربری</label>
+            <input type="text" id="login-username" placeholder="نام کاربری">
+            <label>رمز عبور</label>
+            <input type="password" id="login-password" placeholder="رمز عبور">
+            <button onclick="handleLogin()">ورود به برنامه</button>
+        </div>
+
+        <!-- فرم ثبت‌‌نام -->
+        <div id="register-form" class="hidden">
+            <h3>ثبت‌نام و دریافت ۷ روز تست رایگان</h3>
+            <label>نام داروخانه</label>
+            <input type="text" id="reg-pharmacy-name" placeholder="مثلا: داروخانه دکتر احمدی">
+            <label>نام مدیریت</label>
+            <input type="text" id="reg-owner-name" placeholder="نام و نام خانوادگی">
+            <label>شماره همراه</label>
+            <input type="text" id="reg-owner-phone" placeholder="۰۹۱۲XXXXXXX">
+            <label>نام کاربری</label>
+            <input type="text" id="reg-username" placeholder="جهت ورود به سیستم">
+            <label>رمز عبور</label>
+            <input type="password" id="reg-password" placeholder="رمز عبور">
+            <button onclick="handleRegister()">ثبت‌نام و شروع تست رایگان</button>
+        </div>
+    </div>
+
+    <!-- بخش دوم: داشبورد اصلی برنامه -->
+    <div id="dashboard-section" class="card hidden">
+        <h2>Pharma-Stock</h2>
+        <div id="subscription-status" class="status-box">در حال بررسی...</div>
+
+        <!-- فرم ثبت داروی جدید -->
+        <h3>➕ ثبت داروی جدید</h3>
+        <label>کد بارکد دارو</label>
+        <input type="text" id="drug-barcode" placeholder="بارکد را اسکن یا وارد کنید">
+        <label>نام دارو</label>
+        <input type="text" id="drug-name" placeholder="نام کامل دارو">
+        <label>تعداد موجودی</label>
+        <input type="number" id="drug-qty" placeholder="مثلا: ۵۰">
+        <label>تاریخ انقضا</label>
+        <input type="date" id="drug-expiry">
+        <button onclick="addDrug()">ثبت در موجودی</button>
+
+        <hr style="margin: 25px 0;">
+
+        <!-- جدول موجودی داروخانه‌ها -->
+        <h3>📦 لیست موجودی انبار</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>نام دارو</th>
+                    <th>بارکد</th>
+                    <th>تعداد</th>
+                    <th>انقضا</th>
+                </tr>
+            </thead>
+            <tbody id="inventory-list">
+                <tr><td colspan="4">دارویی ثبت نشده است.</td></tr>
+            </tbody>
+        </table>
+
+        <!-- بخش مدیریت (ویژه مدیر) -->
+        <div id="admin-panel" class="admin-only" style="margin-top: 20px; padding: 10px; background: #fff5f5; border-radius: 8px;">
+            <p style="color: #c53030; font-size: 12px; margin: 0;">🔒 دسترسی ویژه مدیریت: امکان گزارش‌‌گیری مالی و تعریف کاربران جدید</p>
+        </div>
+
+        <button onclick="handleLogout()" class="btn-danger">خروج از حساب</button>
+    </div>
+
+</div>
+
+<script>
+    // تنظیمات Supabase
+    const SUPABASE_URL = "https://lkxfwbffkmryqnkuvvze.supabase.co";
+    const SUPABASE_KEY = "sb_publishable_vvAfqFJD_5sOsrggmwOJ4g_bcyaUDqP";
+    const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    let currentPharmacyId = null;
+
+    function switchTab(tab) {
+        if (tab === 'login') {
+            document.getElementById('login-form').classList.remove('hidden');
+            document.getElementById('register-form').classList.add('hidden');
+            document.getElementById('tab-login-btn').classList.add('active');
+            document.getElementById('tab-reg-btn').classList.remove('active');
+        } else {
+            document.getElementById('login-form').classList.add('hidden');
+            document.getElementById('register-form').classList.remove('hidden');
+            document.getElementById('tab-reg-btn').classList.add('active');
+            document.getElementById('tab-login-btn').classList.remove('active');
+        }
+    }
+
+    // ۱. ثبت‌نام
+    async function handleRegister() {
+        const pharmacyName = document.getElementById('reg-pharmacy-name').value;
+        const ownerName = document.getElementById('reg-owner-name').value;
+        const ownerPhone = document.getElementById('reg-owner-phone').value;
+        const username = document.getElementById('reg-username').value;
+        const password = document.getElementById('reg-password').value;
+
+        if (!pharmacyName || !username || !password) {
+            alert("لطفاً تمامی فیلدهای ضروری را پر کنید.");
+            return;
+        }
+
+        const { data: pharmacy, error: pharmError } = await supabaseClient
+            .from('pharmacies')
+            .insert([{ pharmacy_name: pharmacyName, owner_name: ownerName, owner_phone: ownerPhone }])
+            .select().single();
+
+        if (pharmError) {
+            alert("خطا در ثبت داروخانه: " + pharmError.message);
+            return;
+        }
+
+        const { error: userError } = await supabaseClient
+            .from('users')
+            .insert([{ pharmacy_id: pharmacy.id, full_name: ownerName, username: username, password_hash: password, role: 'admin' }]);
+
+        if (userError) {
+            alert("خطا در ساخت حساب کاربر: " + userError.message);
+        } else {
+            alert("ثبت‌نام با موفقیت انجام شد! ۷ روز مهلت تست رایگان برای شما فعال شد.");
+            switchTab('login');
+        }
+    }
+
+    // ۲. ورود به حساب
+    async function handleLogin() {
+        const username = document.getElementById('login-username').value;
+        const password = document.getElementById('login-password').value;
+
+        const { data: user, error } = await supabaseClient
+            .from('users')
+            .select('*, pharmacies(*)')
+            .eq('username', username)
+            .eq('password_hash', password)
+            .single();
+
+        if (error || !user) {
+            alert("نام کاربری یا رمز عبور اشتباه است!");
+            return;
+        }
+
+        const pharmacy = user.pharmacies;
+        const now = new Date();
+        const expireDate = new Date(pharmacy.plan_expires_at);
+
+        if (expireDate <= now) {
+            alert("مهلت تست ۷ روزه یا اشتراک شما به پایان رسیده است. لطفاً نسبت به تمدید اقدام کنید.");
+            return;
+        }
+
+        currentPharmacyId = pharmacy.id;
+        const remainingDays = Math.ceil((expireDate - now) / (1000 * 60 * 60 * 24));
+
+        document.getElementById('auth-section').classList.add('hidden');
+        document.getElementById('dashboard-section').classList.remove('hidden');
+        document.getElementById('subscription-status').innerText = `داروخانه: ${pharmacy.pharmacy_name} | اعتبار: ${remainingDays} روز باقی‌مانده`;
+
+        if (user.role !== 'admin') {
+            document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'none');
+        }
+    }
+
+    // ۳. افزودن دارو به دیتابیس
+    function addDrug() {
+        const name = document.getElementById('drug-name').value;
+        const barcode = document.getElementById('drug-barcode').value;
+        const qty = document.getElementById('drug-qty').value;
+        const expiry = document.getElementById('drug-expiry').value;
+
+        if(!name || !qty) { alert("نام و تعداد دارو را وارد کنید"); return; }
+
+        const tbody = document.getElementById('inventory-list');
+        if(tbody.rows[0]?.cells.length === 1) tbody.innerHTML = '';
+
+        const row = `<tr><td>${name}</td><td>${barcode || '-'}</td><td>${qty}</td><td>${expiry || '-'}</td></tr>`;
+        tbody.innerHTML += row;
+
+        document.getElementById('drug-name').value = '';
+        document.getElementById('drug-barcode').value = '';
+        document.getElementById('drug-qty').value = '';
+        document.getElementById('drug-expiry').value = '';
+    }
+
+    function handleLogout() {
+        document.getElementById('dashboard-section').classList.add('hidden');
+        document.getElementById('auth-section').classList.remove('hidden');
+    }
+</script>
+
+</body>
+</html>
